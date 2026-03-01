@@ -100,6 +100,7 @@ class CategoriePerf(BaseModel):
     profit: float
     nb_commandes: int
     marge_pct: float
+    roi: float
 
 # === FONCTIONS UTILITAIRES ===
 
@@ -216,6 +217,57 @@ def get_kpi_globaux(
         marge_moyenne=round(marge_moyenne, 2)
     )
 
+@app.get("/kpi/comparaison", tags=["KPI"])
+def get_comparaison_periode(
+    date_debut: str = Query(..., description="Date début (YYYY-MM-DD)"),
+    date_fin: str = Query(..., description="Date fin (YYYY-MM-DD)"),
+    categorie: Optional[str] = Query(None),
+    region: Optional[str] = Query(None)
+):
+    """
+    🔄 COMPARAISON SUR DEUX PÉRIODES
+    
+    Compare la période sélectionnée avec la période précédente de même durée.
+    """
+    d_debut = pd.to_datetime(date_debut)
+    d_fin = pd.to_datetime(date_fin)
+    duree = d_fin - d_debut
+    
+    # Période complémentaire (immédiatement avant)
+    d_debut_prec = d_debut - duree - pd.Timedelta(days=1)
+    d_fin_prec = d_debut - pd.Timedelta(days=1)
+    
+    # Données actuelles
+    df_actuel = filtrer_dataframe(df, date_debut, date_fin, categorie, region)
+    ca_actuel = df_actuel['Sales'].sum()
+    profit_actuel = df_actuel['Profit'].sum()
+    
+    # Données précédentes
+    df_prec = filtrer_dataframe(df, d_debut_prec.strftime('%Y-%m-%d'), d_fin_prec.strftime('%Y-%m-%d'), categorie, region)
+    ca_prec = df_prec['Sales'].sum()
+    profit_prec = df_prec['Profit'].sum()
+    
+    # Calcul de l'évolution
+    evol_ca = ((ca_actuel - ca_prec) / ca_prec * 100) if ca_prec > 0 else 0
+    evol_profit = ((profit_actuel - profit_prec) / profit_prec * 100) if profit_prec > 0 else 0
+    
+    return {
+        "actuel": {
+            "ca": round(ca_actuel, 2),
+            "profit": round(profit_actuel, 2),
+            "debut": date_debut,
+            "fin": date_fin
+        },
+        "precedent": {
+            "ca": round(ca_prec, 2),
+            "profit": round(profit_prec, 2),
+            "debut": d_debut_prec.strftime('%Y-%m-%d'),
+            "fin": d_fin_prec.strftime('%Y-%m-%d')
+        },
+        "evolution_ca_pct": round(evol_ca, 2),
+        "evolution_profit_pct": round(evol_profit, 2)
+    }
+
 @app.get("/kpi/produits/top", tags=["KPI"])
 def get_top_produits(
     limite: int = Query(10, ge=1, le=50, description="Nombre de produits à retourner"),
@@ -278,11 +330,13 @@ def get_performance_categories():
         'Order ID': 'nunique'
     }).reset_index()
     
-    # Calcul de la marge
+    # Calcul de la marge et ROI (simplifié : ROI = Profit / (CA - Profit) * 100 si CA-Profit > 0)
+    # Dans ce dataset on n'a pas le coût direct, on peut estimer Coût = CA - Profit
     categories['marge_pct'] = (categories['Profit'] / categories['Sales'] * 100).round(2)
+    categories['roi'] = (categories['Profit'] / (categories['Sales'] - categories['Profit']) * 100).round(2)
     
     # Renommage des colonnes
-    categories.columns = ['categorie', 'ca', 'profit', 'nb_commandes', 'marge_pct']
+    categories.columns = ['categorie', 'ca', 'profit', 'nb_commandes', 'marge_pct', 'roi']
     
     # Tri par CA décroissant
     categories = categories.sort_values('ca', ascending=False)
@@ -346,6 +400,39 @@ def get_performance_geographique():
     geo = geo.sort_values('ca', ascending=False)
     
     return geo.to_dict('records')
+
+@app.get("/kpi/geographique/états", tags=["KPI"])
+def get_performance_etats():
+    """
+    🇺🇸 PERFORMANCE PAR ÉTAT
+    
+    Analyse détaillée par État pour la cartographie
+    """
+    etats = df.groupby('State').agg({
+        'Sales': 'sum',
+        'Profit': 'sum',
+        'Order ID': 'nunique'
+    }).reset_index()
+    
+    etats.columns = ['etat', 'ca', 'profit', 'nb_commandes']
+    
+    # Mapping des noms complets vers les codes ISO (nécessaires pour Plotly USA-states)
+    state_to_code = {
+        'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+        'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+        'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+        'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+        'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS',
+        'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH',
+        'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC',
+        'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA',
+        'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD', 'Tennessee': 'TN',
+        'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA',
+        'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY', 'District of Columbia': 'DC'
+    }
+    etats['code'] = etats['etat'].map(state_to_code)
+    
+    return etats.to_dict('records')
 
 @app.get("/kpi/clients", tags=["KPI"])
 def get_analyse_clients(

@@ -36,22 +36,27 @@ st.markdown("""
     }
     
     /* Amélioration des métriques Streamlit */
-    .stMetric {
-        background-color: #f8f9fa;
+    [data-testid="stMetric"] {
+        background-color: #1a1c24;
         padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #667eea;
+        border-radius: 12px;
+        border: 1px solid #3d414d;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    [data-testid="stMetricLabel"] p {
+        color: #94a3b8 !important;
+        font-weight: 500 !important;
+        font-size: 1rem !important;
+    }
+    
+    [data-testid="stMetricValue"] div {
+        font-weight: 700 !important;
     }
     
     /* Style des titres */
-    h1 {
-        color: #2c3e50;
-        font-weight: 700;
-    }
-    
-    h2 {
-        color: #34495e;
-        font-weight: 600;
+    h1, h2, h3 {
+        font-family: 'Inter', sans-serif;
     }
     
     /* Style du sidebar */
@@ -198,7 +203,47 @@ if region != "Toutes":
 if segment != "Tous":
     params_filtres['segment'] = segment
 
-# === SECTION 1 : KPI GLOBAUX ===
+# === SECTION 1 : COMPARAISON ET STORYTELLING ===
+st.header("📖 Storytelling & Analyse Comparative")
+
+with st.spinner("🔍 Analyse des tendances..."):
+    # Appel de la nouvelle API de comparaison
+    try:
+        comp_data = appeler_api("/kpi/comparaison", params=params_filtres)
+        
+        # Section Storytelling Automatisé
+        col_story, col_insight = st.columns([2, 1])
+        
+        with col_story:
+            st.subheader("💡 Ce que disent les chiffres")
+            
+            diff_ca = comp_data['evolution_ca_pct']
+            diff_profit = comp_data['evolution_profit_pct']
+            
+            if diff_ca > 0:
+                st.success(f"📈 **Croissance positive** : Le chiffre d'affaires a progressé de **{diff_ca}%** par rapport à la période précédente.")
+            else:
+                st.warning(f"📉 **Baisse de régime** : Le chiffre d'affaires a reculé de **{abs(diff_ca)}%**. Une analyse des causes est recommandée.")
+                
+            if diff_profit > diff_ca:
+                st.info("🎯 **Optimisation des marges** : Le profit croît plus vite que le CA, signe d'une meilleure efficacité opérationnelle.")
+            elif diff_profit < 0 and diff_ca > 0:
+                st.error("⚠️ **Alerte Rentabilité** : Malgré une hausse du CA, les profits chutent. Attention aux coûts ou aux remises excessives.")
+                
+        with col_insight:
+            st.subheader("🎯 Objectif Décisionnel")
+            st.info("""
+            L'objectif de ce dashboard est de passer du **constat** (ce qui s'est passé) à la **décision** (ce qu'il faut faire). 
+            Utilisez les filtres à gauche pour isoler les régions ou segments sous-performants.
+            """)
+    except Exception as e:
+        st.warning("⚠️ Les données de comparaison ne sont pas disponibles pour cette période.")
+        comp_data = None
+
+st.divider()
+
+# === SECTION 2 : KPI GLOBAUX ===
+
 st.header("📊 Indicateurs Clés de Performance (KPI)")
 
 with st.spinner("📈 Chargement des KPI..."):
@@ -207,11 +252,16 @@ with st.spinner("📈 Chargement des KPI..."):
 # Affichage des KPI en 4 colonnes
 col1, col2, col3, col4 = st.columns(4)
 
+# Récupération des deltas si disponibles
+delta_ca = comp_data['evolution_ca_pct'] if comp_data else None
+delta_profit = comp_data['evolution_profit_pct'] if comp_data else None
+
 with col1:
     st.metric(
         label="💰 Chiffre d'affaires",
         value=formater_euro(kpi_data['ca_total']),
-        help="Somme totale des ventes"
+        delta=f"{delta_ca}%" if delta_ca is not None else None,
+        help="Somme totale des ventes (Delta vs période précédente)"
     )
     st.metric(
         label="📈 Marge moyenne",
@@ -228,7 +278,8 @@ with col2:
     st.metric(
         label="💵 Profit total",
         value=formater_euro(kpi_data['profit_total']),
-        help="Bénéfice total généré"
+        delta=f"{delta_profit}%" if delta_profit is not None else None,
+        help="Bénéfice total généré (Delta vs période précédente)"
     )
 
 with col3:
@@ -371,29 +422,30 @@ with tab2:
         st.plotly_chart(fig_cat, use_container_width=True)
     
     with col_right:
-        # Graphique de marge
-        fig_marge = px.bar(
+        # Graphique ROI
+        fig_roi = px.bar(
             df_cat,
             x='categorie',
-            y='marge_pct',
-            title="Marge par Catégorie (%)",
-            labels={'categorie': 'Catégorie', 'marge_pct': 'Marge (%)'},
-            color='marge_pct',
-            color_continuous_scale='Viridis',
-            text='marge_pct',
+            y='roi',
+            title="ROI par Catégorie (%)",
+            labels={'categorie': 'Catégorie', 'roi': 'ROI (%)'},
+            color='roi',
+            color_continuous_scale='RdYlGn',
+            text='roi',
             height=400
         )
-        fig_marge.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-        st.plotly_chart(fig_marge, use_container_width=True)
+        fig_roi.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        st.plotly_chart(fig_roi, use_container_width=True)
     
     # Tableau récapitulatif
-    st.markdown("### 📊 Tableau récapitulatif")
+    st.markdown("### 📊 Tableau récapitulatif avec Rentabilité")
     st.dataframe(
-        df_cat[['categorie', 'ca', 'profit', 'marge_pct', 'nb_commandes']].rename(columns={
+        df_cat[['categorie', 'ca', 'profit', 'marge_pct', 'roi', 'nb_commandes']].rename(columns={
             'categorie': 'Catégorie',
             'ca': 'CA (€)',
             'profit': 'Profit (€)',
             'marge_pct': 'Marge (%)',
+            'roi': 'ROI (%)',
             'nb_commandes': 'Nb Commandes'
         }),
         use_container_width=True,
@@ -513,6 +565,29 @@ with tab4:
         fig_geo_clients.update_traces(textposition='inside', textinfo='percent+label')
         st.plotly_chart(fig_geo_clients, use_container_width=True)
     
+    # Heatmap par état (USA)
+    st.subheader("🗺️ Carte thermique des ventes par État")
+    
+    etats_data = appeler_api("/kpi/geographique/états")
+    df_etats = pd.DataFrame(etats_data)
+    
+    # Mapping des noms d'états vers codes (simplifié pour le dataset Superstore qui utilise les noms complets)
+    # Plotly a besoin des codes ISO (ex: CA, NY) ou des noms exacts si configuré
+    fig_map = px.choropleth(
+        df_etats,
+        locations='code',
+        locationmode="USA-states",
+        color='ca',
+        scope="usa",
+        title="Chiffre d'affaires par État (USD)",
+        labels={'ca': 'CA ($)', 'code': 'État'},
+        color_continuous_scale="Viridis",
+        template="plotly_white"
+    )
+
+    fig_map.update_layout(height=500, margin={"r":0,"t":50,"l":0,"b":0})
+    st.plotly_chart(fig_map, use_container_width=True)
+
     # Tableau géographique
     st.markdown("### 📊 Tableau géographique détaillé")
     st.dataframe(
