@@ -4,6 +4,8 @@ Système complet d'analyse Business Intelligence (BI) construit sur le dataset *
 
 > **Auteurs** : Mohamed Yanis BENADROUCHE, Cyprien BROCHE, Yousra ZAABAT
 
+> **Légende** : ⬜ Fonctionnalité présente dans la version de base — 🟩 Ajout réalisé dans le cadre de l'atelier
+
 ---
 
 ## 📁 Structure du projet
@@ -68,16 +70,11 @@ pip install -r requirements.txt
 python backend/main.py
 ```
 
-> API disponible sur `http://localhost:8000`  
-> Documentation Swagger interactive : `http://localhost:8000/docs`
-
 #### 3. Lancer le frontend (Dashboard)
 
 ```bash
 streamlit run frontend/dashboard.py
 ```
-
-> Dashboard disponible sur `http://localhost:8501`
 
 ---
 
@@ -85,119 +82,104 @@ streamlit run frontend/dashboard.py
 
 ### 💰 Finance & Rentabilité
 
-| Indicateur | Formule | Impact décisionnel |
-|---|---|---|
-| CA Total & Profit Total | Somme des ventes / profits | Avec delta vs période précédente (%) |
-| Marge moyenne | Profit / CA × 100 | Mesure l'efficacité commerciale |
-| ROI par catégorie | Profit / (CA − Profit) × 100 | Identifie les segments les plus rentables |
-| Panier moyen | CA / Nb commandes | Pilote la stratégie de montée en gamme |
-| Articles par commande | Quantité / Nb commandes | Mesure le cross-selling |
-| Tranches de marge | Déficitaire / Faible / Correct / Excellent | Détecte les zones de perte |
-| Remise moyenne par catégorie | Moyenne des taux de remise | Évalue l'impact des promotions sur les marges |
-| Produits déficitaires | Top 10 produits à profit négatif | Permet de revoir le catalogue ou la politique tarifaire |
+| Indicateur | Formule | Impact décisionnel | |
+|---|---|---|---|
+| CA Total & Profit Total | Somme des ventes / profits | Suivi global de l'activité | ⬜ |
+| Nombre de commandes | Count distinct Order ID | Volume d'activité | ⬜ |
+| Nombre de clients | Count distinct Customer ID | Taille de la base client | ⬜ |
+| Panier moyen | CA / Nb commandes | Pilote la stratégie de montée en gamme | ⬜ |
+| Marge moyenne | Profit / CA × 100 | Mesure l'efficacité commerciale | ⬜ |
+| Articles par commande | Quantité / Nb commandes | Mesure le cross-selling | ⬜ |
+| Delta CA & Profit vs période précédente | (CA N − CA N-1) / CA N-1 × 100 | Suit la dynamique en temps réel | 🟩 |
+| Tranches de marge | Déficitaire / Faible / Correct / Excellent | Détecte les zones de perte | 🟩 |
+| Remise moyenne par catégorie | Moyenne des taux de remise | Évalue l'impact des promotions | 🟩 |
+| Produits déficitaires | Top 10 produits à profit négatif | Permet de revoir le catalogue | 🟩 |
+| ROI par catégorie | Profit / (CA − Profit) × 100 | Identifie les segments les plus rentables | 🟩 |
 
 ### 📦 Produits & Catégories
 
-| Indicateur | Formule | Impact décisionnel |
-|---|---|---|
-| Top N produits | Classement par CA, Profit ou Quantité | Identifie les best-sellers |
-| Performance par catégorie | CA, Profit, Marge, ROI, Nb commandes | Vision macro des segments produits |
-| Taux de croissance mensuel (MoM) | ((CA mois N − CA mois N-1) / CA mois N-1) × 100 | Suit la dynamique business en temps réel |
-| Performance trimestrielle | CA et Profit agrégés par trimestre | Détecte la saisonnalité |
-| Meilleur / Pire mois historique | Détection automatique des extremes | Anticipe les pics et creux d'activité |
-| **ABC Analysis (Pareto)** | Classe A = 80% CA cumulé / B = 15% / C = 5% | Optimise la gestion des stocks et la stratégie commerciale |
+| Indicateur | Formule | Impact décisionnel | |
+|---|---|---|---|
+| Top N produits | Classement par CA, Profit ou Quantité | Identifie les best-sellers | ⬜ |
+| Répartition CA par catégorie | Agrégation par catégorie | Vision macro des segments produits | ⬜ |
+| Évolution CA dans le temps | Agrégation jour / mois / année | Suivi de l'activité | ⬜ |
+| Taux de croissance mensuel (MoM) | ((CA mois N − CA mois N-1) / CA mois N-1) × 100 | Suit la dynamique business en temps réel | 🟩 |
+| Performance trimestrielle | CA et Profit par trimestre | Détecte la saisonnalité | 🟩 |
+| Meilleur / Pire mois historique | Détection automatique des extremes | Anticipe les pics et creux | 🟩 |
+| **ABC Analysis (Pareto)** | Classe A = 80% CA cumulé / B = 15% / C = 5% | Optimise stocks et stratégie commerciale | 🟩 |
 
 ### 👥 Clients
 
-| Indicateur | Formule | Impact décisionnel |
-|---|---|---|
-| Top 10 clients par CA | Agrégation par client | Identifie les comptes clés à chouchouter |
-| **Taux de rétention client** | (Clients 2+ commandes / Total clients) × 100 | Mesure la fidélisation — plus rentable que l'acquisition |
-| Distribution des commandes | Nb clients par tranche de commandes | Révèle le profil de fidélité de la base |
-| Évolution de la rétention | Taux de rétention par année | Suit la tendance de fidélisation dans le temps |
-| Analyse par segment | Consumer / Corporate / Home Office | Cible les actions marketing par profil |
-| **Segmentation RFM** | Score R + Score F + Score M (quartiles) | Classe les clients en Champions / Fidèles / À risque / Perdus |
+| Indicateur | Formule | Impact décisionnel | |
+|---|---|---|---|
+| Top 10 clients par CA | Agrégation par client | Identifie les comptes clés | ⬜ |
+| Clients récurrents vs 1 achat | Count par nb commandes | Vue globale de la fidélité | ⬜ |
+| Performance par segment | Consumer / Corporate / Home Office | Cible les actions marketing | ⬜ |
+| **Taux de rétention client** | (Clients 2+ commandes / Total clients) × 100 | Mesure la fidélisation | 🟩 |
+| Distribution des commandes | Nb clients par tranche de commandes | Révèle le profil de fidélité | 🟩 |
+| Évolution de la rétention | Taux de rétention par année | Suit la tendance dans le temps | 🟩 |
+| **Segmentation RFM** | Score R + Score F + Score M (quartiles) | Classe les clients en 4 segments actionnables | 🟩 |
 
 ### 🌍 Géographie
 
-| Indicateur | Description |
-|---|---|
-| Performance par région | CA, Profit, Clients, Commandes |
-| Carte thermique USA | Choroplèthe par État (code ISO) |
+| Indicateur | Description | |
+|---|---|---|
+| Performance par région | CA, Profit, Clients, Commandes | ⬜ |
+| Carte thermique USA | Choroplèthe par État (code ISO) | 🟩 |
 
 ---
 
 ## 🔌 Endpoints API
 
-| Méthode | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Informations générales sur l'API et le dataset |
-| GET | `/kpi/globaux` | KPI globaux filtrables (date, catégorie, région, segment) |
-| GET | `/kpi/comparaison` | Comparaison période courante vs période précédente |
-| GET | `/kpi/produits/top` | Top produits par CA, Profit ou Quantité |
-| GET | `/kpi/produits/abc` | ABC Analysis — classement Pareto de tous les produits |
-| GET | `/kpi/categories` | Performance par catégorie avec ROI |
-| GET | `/kpi/temporel` | Évolution temporelle (jour / mois / année) |
-| GET | `/kpi/geographique` | Performance par région |
-| GET | `/kpi/geographique/états` | Performance par État (avec codes ISO) |
-| GET | `/kpi/clients` | Top clients, récurrence, segments |
-| GET | `/kpi/clients/retention` | Taux de rétention, distribution, évolution annuelle |
-| GET | `/kpi/clients/rfm` | Segmentation RFM des clients |
-| GET | `/kpi/rentabilite` | Déficitaires, remises, tranches de marge |
-| GET | `/kpi/tendances` | MoM, trimestriel, extremes historiques |
-| GET | `/filters/valeurs` | Valeurs disponibles pour les filtres |
-| GET | `/data/commandes` | Données brutes paginées |
+| Méthode | Endpoint | Description | |
+|---|---|---|---|
+| GET | `/` | Informations générales sur l'API | ⬜ |
+| GET | `/kpi/globaux` | KPI globaux filtrables | ⬜ |
+| GET | `/kpi/produits/top` | Top produits par CA, Profit ou Quantité | ⬜ |
+| GET | `/kpi/categories` | Performance par catégorie | ⬜ |
+| GET | `/kpi/temporel` | Évolution temporelle (jour / mois / année) | ⬜ |
+| GET | `/kpi/geographique` | Performance par région | ⬜ |
+| GET | `/kpi/clients` | Top clients, récurrence, segments | ⬜ |
+| GET | `/filters/valeurs` | Valeurs disponibles pour les filtres | ⬜ |
+| GET | `/data/commandes` | Données brutes paginées | ⬜ |
+| GET | `/kpi/comparaison` | Comparaison période courante vs précédente | 🟩 |
+| GET | `/kpi/geographique/états` | Performance par État avec codes ISO | 🟩 |
+| GET | `/kpi/rentabilite` | Déficitaires, remises, tranches de marge | 🟩 |
+| GET | `/kpi/tendances` | MoM, trimestriel, extremes historiques | 🟩 |
+| GET | `/kpi/clients/retention` | Taux de rétention, distribution, évolution | 🟩 |
+| GET | `/kpi/clients/rfm` | Segmentation RFM des clients | 🟩 |
+| GET | `/kpi/produits/abc` | ABC Analysis — classement Pareto | 🟩 |
 
 ---
 
 ## 🖥️ Sections du Dashboard
 
-### 1. Storytelling & Analyse Comparative
-Génération automatique de messages contextuels (alertes, succès, avertissements) basés sur l'évolution du CA et du Profit par rapport à la période précédente.
-
-### 2. KPI Globaux
-Huit indicateurs clés avec deltas : CA, Profit, Marge, Commandes, Clients, Panier moyen, Quantité, Articles/commande.
-
-### 3. Analyses Détaillées (4 onglets)
-- **🏆 Produits** : Top N produits avec sélecteur de critère et tableau détaillé
-- **📦 Catégories** : CA vs Profit et ROI par catégorie
-- **📅 Temporel** : Évolution jour/mois/année du CA, Profit et Commandes
-- **🌍 Géographique** : Barres par région, camembert clients, carte thermique USA
-
-### 4. Analyse Clients
-Top clients, statistiques de récurrence, performance par segment.
-
-### 5. Rentabilité
-Répartition par tranche de marge, alertes sur les remises excessives, visualisation des produits déficitaires.
-
-### 6. Tendances & Saisonnalité
-Croissance MoM colorée (vert/rouge), records historiques, performance trimestrielle.
-
-### 7. Taux de Rétention Client
-Taux global avec interprétation automatique, distribution du nombre de commandes par client, évolution annuelle du taux de rétention.
-
-### 8. ABC Analysis — Pareto des Produits
-Résumé par classe (A/B/C), camembert des classes, courbe de Pareto avec seuil 80%, tableau filtrable du catalogue complet.
-
-### 9. Segmentation RFM
-Répartition des clients en 4 segments avec montant moyen, récence et recommandations actionnables par segment.
-
-### 10. Synthèse Décisionnelle
-Tableau de bord narratif synthétisant les constats, les actions prioritaires et les opportunités détectées automatiquement.
+| # | Section | |
+|---|---|---|
+| 1 | **Storytelling & Analyse Comparative** — alertes dynamiques CA/Profit vs période précédente | 🟩 |
+| 2 | **KPI Globaux** — 8 métriques avec deltas | ⬜ (enrichi 🟩) |
+| 3 | **Analyses Détaillées** — 4 onglets : Produits, Catégories, Temporel, Géographique | ⬜ (enrichi 🟩) |
+| 4 | **Analyse Clients** — Top clients, récurrence, segments | ⬜ |
+| 5 | **Rentabilité** — tranches de marge, alertes remises, produits déficitaires | 🟩 |
+| 6 | **Tendances & Saisonnalité** — MoM, records historiques, trimestriel | 🟩 |
+| 7 | **Taux de Rétention Client** — taux global, distribution, évolution annuelle | 🟩 |
+| 8 | **ABC Analysis** — Pareto, courbe cumulée, tableau filtrable par classe | 🟩 |
+| 9 | **Segmentation RFM** — 4 segments avec recommandations actionnables | 🟩 |
+| 10 | **Synthèse Décisionnelle** — constats, actions prioritaires, opportunités | 🟩 |
 
 ---
 
 ## 💡 Choix techniques
 
-| Technologie | Raison |
-|---|---|
-| **FastAPI** | Validation native via Pydantic, documentation Swagger automatique, haute performance |
-| **Pandas** | Vectorisation des calculs financiers, manipulation des séries temporelles |
-| **Plotly** | Graphiques interactifs, support natif des cartes choroplèthes USA |
-| **Streamlit** | Déploiement rapide, widgets interactifs, système de cache intégré |
-| **Docker Compose** | Orchestration des services backend/frontend, résolution DNS interne (`http://backend:8000`) |
-| **`@st.cache_data`** | Évite les appels API redondants lors des changements de filtres |
-| **`math.isnan` / `nettoyer_nan()`** | Nettoyage des valeurs `NaN`/`Inf` avant sérialisation JSON (non supportées nativement par `json.dumps`) |
+| Technologie | Raison | |
+|---|---|---|
+| **FastAPI** | Validation native via Pydantic, documentation Swagger automatique | ⬜ |
+| **Pandas** | Vectorisation des calculs financiers, séries temporelles | ⬜ |
+| **Plotly** | Graphiques interactifs, cartes choroplèthes USA | ⬜ |
+| **Streamlit** | Déploiement rapide, widgets interactifs | ⬜ |
+| **`@st.cache_data`** | Évite les appels API redondants lors des changements de filtres | ⬜ |
+| **Docker Compose** | Orchestration backend/frontend, DNS interne (`http://backend:8000`) | 🟩 |
+| **`math.isnan` / `nettoyer_nan()`** | Nettoyage des `NaN`/`Inf` avant sérialisation JSON | 🟩 |
 
 ---
 
