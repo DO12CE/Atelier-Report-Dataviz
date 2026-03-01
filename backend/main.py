@@ -11,7 +11,21 @@ from datetime import datetime
 import pandas as pd
 from pydantic import BaseModel
 import logging
+import math
 
+
+def nettoyer_nan(records: list) -> list:
+    """Remplace tous les NaN/Inf par None dans une liste de dicts (sérialisable en JSON)"""
+    cleaned = []
+    for row in records:
+        cleaned_row = {}
+        for k, v in row.items():
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                cleaned_row[k] = None
+            else:
+                cleaned_row[k] = v
+        cleaned.append(cleaned_row)
+    return cleaned
 # Configuration du logger pour faciliter le débogage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -524,6 +538,289 @@ def get_commandes(
         "data": commandes_dict.to_dict('records')
     }
 
+@app.get("/kpi/rentabilite", tags=["KPI"])
+def get_rentabilite():
+    """
+    💸 ANALYSE DE RENTABILITÉ
+
+    Retourne :
+    - Produits déficitaires (profit négatif)
+    - Taux de remise moyen par catégorie
+    - Répartition des commandes par tranche de marge
+    """
+    # --- Produits déficitaires ---
+    produits = df.groupby(['Product Name', 'Category']).agg({
+        'Profit': 'sum',
+        'Sales': 'sum',
+        'Discount': 'mean'
+    }).reset_index()
+    produits.columns = ['produit', 'categorie', 'profit', 'ca', 'remise_moy']
+    produits['marge_pct'] = (produits['profit'] / produits['ca'] * 100).round(2)
+
+    deficitaires = (
+        produits[produits['profit'] < 0]
+        .sort_values('profit')
+        .head(10)
+        .to_dict('records')
+    )
+
+    # --- Remise moyenne par catégorie ---
+    remises = df.groupby('Category')['Discount'].mean().reset_index()
+    remises.columns = ['categorie', 'remise_moy']
+    remises['remise_moy'] = (remises['remise_moy'] * 100).round(2)
+
+    # --- Tranches de marge sur chaque ligne de commande ---
+    df_marge = df.copy()
+    df_marge['marge_ligne'] = df_marge['Profit'] / df_marge['Sales'].replace(0, pd.NA) * 100
+
+    def tranche(m):
+        if pd.isna(m):   return 'Inconnue'
+        if m < 0:        return '🔴 Déficitaire (<0%)'
+        if m < 10:       return '🟡 Faible (0–10%)'
+        if m < 25:       return '🟢 Correct (10–25%)'
+        return           '💎 Excellent (>25%)'
+
+    df_marge['tranche'] = df_marge['marge_ligne'].apply(tranche)
+    tranches = df_marge.groupby('tranche').agg(
+        nb_lignes=('Order ID', 'count'),
+        ca=('Sales', 'sum'),
+        profit=('Profit', 'sum')
+    ).reset_index().to_dict('records')
+
+    return {
+        "produits_deficitaires": deficitaires,
+        "remises_par_categorie": remises.to_dict('records'),
+        "tranches_marge": tranches
+    }
+
+
+# ============================================================
+# CORRECTIF — endpoint /kpi/tendances dans main.py
+# Remplacez le bloc complet de cet endpoint par celui-ci
+# ============================================================
+
+@app.get("/kpi/tendances", tags=["KPI"])
+def get_tendances():
+    """
+    📐 TENDANCES & SAISONNALITÉ
+
+    Retourne :
+    - Croissance mois sur mois (MoM)
+    - Meilleur et pire mois historique
+    - Performance par trimestre
+    """
+    df_t = df.copy()
+    df_t['mois']      = df_t['Order Date'].dt.to_period('M').astype(str)
+    df_t['trimestre'] = 'T' + df_t['Order Date'].dt.quarter.astype(str) + \
+                        ' ' + df_t['Order Date'].dt.year.astype(str)
+
+    # Évolution mensuelle
+    mensuel = df_t.groupby('mois').agg(
+        ca=('Sales', 'sum'),
+        profit=('Profit', 'sum'),
+        nb_commandes=('Order ID', 'nunique')
+    ).reset_index().sort_values('mois')
+
+    mensuel['ca_mom_pct'] = mensuel['ca'].pct_change().mul(100).round(2)
+
+    # Meilleur / pire mois
+    meilleur = mensuel.loc[mensuel['ca'].idxmax()].to_dict()
+    pire     = mensuel.loc[mensuel['ca'].idxmin()].to_dict()
+
+    # Par trimestre
+    trimestriel = df_t.groupby('trimestre').agg(
+        ca=('Sales', 'sum'),
+        profit=('Profit', 'sum')
+    ).reset_index().sort_values('trimestre')
+
+    # Nettoyage obligatoire : NaN → None avant sérialisation JSON
+    mensuel_records     = nettoyer_nan(mensuel.to_dict('records'))
+    meilleur_clean      = nettoyer_nan([meilleur])[0]
+    pire_clean          = nettoyer_nan([pire])[0]
+    trimestriel_records = nettoyer_nan(trimestriel.to_dict('records'))
+
+    return {
+        "mensuel":       mensuel_records,
+        "meilleur_mois": meilleur_clean,
+        "pire_mois":     pire_clean,
+        "trimestriel":   trimestriel_records
+    }
+
+@app.get("/kpi/clients/rfm", tags=["KPI"])
+def get_rfm():
+    """
+    🎯 ANALYSE RFM (Récence / Fréquence / Montant)
+
+    Segmente les clients en 4 groupes :
+    - Champions, Fidèles, À risque, Perdus
+    """
+    date_ref = df['Order Date'].max()
+
+    rfm = df.groupby('Customer ID').agg(
+        recence=('Order Date',    lambda x: (date_ref - x.max()).days),
+        frequence=('Order ID',    'nunique'),
+        montant=('Sales',         'sum'),
+        nom=('Customer Name',     'first')
+    ).reset_index()
+
+    # Score simple 1-4 par quartile (4 = meilleur)
+    rfm['score_R'] = pd.qcut(rfm['recence'],   4, labels=[4, 3, 2, 1]).astype(int)
+    rfm['score_F'] = pd.qcut(rfm['frequence'].rank(method='first'), 4, labels=[1, 2, 3, 4]).astype(int)
+    rfm['score_M'] = pd.qcut(rfm['montant'].rank(method='first'),   4, labels=[1, 2, 3, 4]).astype(int)
+    rfm['score_rfm'] = rfm['score_R'] + rfm['score_F'] + rfm['score_M']
+
+    def segment_rfm(s):
+        if s >= 10: return 'Champions'
+        if s >= 7:  return 'Fidèles'
+        if s >= 5:  return 'À risque'
+        return             'Perdus / Inactifs'
+
+    rfm['segment'] = rfm['score_rfm'].apply(segment_rfm)
+
+    # Résumé par segment
+    resume = rfm.groupby('segment').agg(
+        nb_clients=('Customer ID', 'count'),
+        montant_moyen=('montant', 'mean'),
+        recence_moyenne=('recence', 'mean'),
+        frequence_moyenne=('frequence', 'mean')
+    ).reset_index()
+    resume['montant_moyen']   = resume['montant_moyen'].round(2)
+    resume['recence_moyenne'] = resume['recence_moyenne'].round(1)
+    resume['frequence_moyenne'] = resume['frequence_moyenne'].round(2)
+
+    return {
+        "resume_segments": resume.to_dict('records'),
+        "detail_clients":  rfm[['Customer ID', 'nom', 'recence', 'frequence',
+                                  'montant', 'score_rfm', 'segment']]
+                              .sort_values('score_rfm', ascending=False)
+                              .head(50)
+                              .to_dict('records')
+    }
+
+
+@app.get("/kpi/clients/retention", tags=["KPI"])
+def get_taux_retention():
+    """
+    🔁 TAUX DE RÉTENTION CLIENT
+
+    Calcule le pourcentage de clients ayant passé au moins 2 commandes.
+    Formule : (Clients avec 2+ commandes / Total clients) × 100
+
+    Retourne également :
+    - L'évolution du taux de rétention par année
+    - La distribution du nombre de commandes par client
+    """
+    # Nombre de commandes par client
+    commandes_par_client = df.groupby('Customer ID')['Order ID'].nunique().reset_index()
+    commandes_par_client.columns = ['customer_id', 'nb_commandes']
+
+    total_clients        = len(commandes_par_client)
+    clients_recurrents   = len(commandes_par_client[commandes_par_client['nb_commandes'] >= 2])
+    clients_1_achat      = total_clients - clients_recurrents
+
+    # Formule exacte du taux de rétention
+    taux_retention = round(clients_recurrents / total_clients * 100, 2) if total_clients > 0 else 0
+
+    # Distribution du nombre de commandes (cappée à 10+ pour lisibilité)
+    commandes_par_client['bucket'] = commandes_par_client['nb_commandes'].apply(
+        lambda x: str(x) if x <= 9 else '10+'
+    )
+    distribution = (
+        commandes_par_client.groupby('bucket')['customer_id']
+        .count()
+        .reset_index()
+        .rename(columns={'customer_id': 'nb_clients', 'bucket': 'nb_commandes'})
+        .sort_values('nb_commandes')
+    )
+
+    # Évolution du taux de rétention par année
+    df_annee = df.copy()
+    df_annee['annee'] = df_annee['Order Date'].dt.year
+
+    retention_annuelle = []
+    for annee in sorted(df_annee['annee'].unique()):
+        df_a = df_annee[df_annee['annee'] == annee]
+        cp = df_a.groupby('Customer ID')['Order ID'].nunique()
+        tot = len(cp)
+        rec = len(cp[cp >= 2])
+        retention_annuelle.append({
+            "annee": int(annee),
+            "total_clients": tot,
+            "clients_recurrents": rec,
+            "taux_retention_pct": round(rec / tot * 100, 2) if tot > 0 else 0
+        })
+
+    return {
+        "taux_retention_pct":   taux_retention,
+        "total_clients":        total_clients,
+        "clients_recurrents":   clients_recurrents,
+        "clients_1_achat":      clients_1_achat,
+        "distribution_commandes": distribution.to_dict('records'),
+        "retention_par_annee":  retention_annuelle
+    }
+
+
+@app.get("/kpi/produits/abc", tags=["KPI"])
+def get_abc_analysis():
+    """
+    📦 ABC ANALYSIS DES PRODUITS (Analyse Pareto)
+
+    Classifie chaque produit en 3 catégories selon sa contribution au CA total :
+    - Classe A : produits représentant 80% du CA cumulé  → priorité stratégique
+    - Classe B : produits représentant les 15% suivants  → importance secondaire
+    - Classe C : produits représentant les 5% restants   → faible valeur unitaire
+
+    Impact : optimisation des stocks et de la stratégie commerciale
+    """
+    # Agrégation CA par produit
+    produits = df.groupby(['Product Name', 'Category', 'Sub-Category']).agg(
+        ca=('Sales', 'sum'),
+        profit=('Profit', 'sum'),
+        quantite=('Quantity', 'sum'),
+        nb_commandes=('Order ID', 'nunique')
+    ).reset_index()
+
+    produits.columns = ['produit', 'categorie', 'sous_categorie', 'ca', 'profit', 'quantite', 'nb_commandes']
+
+    # Tri décroissant par CA
+    produits = produits.sort_values('ca', ascending=False).reset_index(drop=True)
+
+    ca_total    = produits['ca'].sum()
+    produits['ca_pct']      = (produits['ca'] / ca_total * 100).round(4)
+    produits['ca_cumule_pct'] = produits['ca_pct'].cumsum().round(4)
+
+    # Attribution des classes ABC
+    def classe_abc(ca_cum):
+        if ca_cum <= 80: return 'A'
+        if ca_cum <= 95: return 'B'
+        return 'C'
+
+    produits['classe'] = produits['ca_cumule_pct'].apply(classe_abc)
+
+    # Résumé par classe
+    resume = produits.groupby('classe').agg(
+        nb_produits=('produit', 'count'),
+        ca_total=('ca', 'sum'),
+        ca_pct_total=('ca_pct', 'sum')
+    ).reset_index()
+    resume['ca_total']     = resume['ca_total'].round(2)
+    resume['ca_pct_total'] = resume['ca_pct_total'].round(2)
+
+    # Top 20 produits pour l'affichage du graphique Pareto
+    top_pareto = produits.head(20)[
+        ['produit', 'categorie', 'sous_categorie', 'ca', 'ca_pct', 'ca_cumule_pct', 'classe',
+         'profit', 'quantite', 'nb_commandes']
+    ].to_dict('records')
+
+    return {
+        "ca_total":      round(ca_total, 2),
+        "resume_abc":    resume.to_dict('records'),
+        "top_pareto":    top_pareto,
+        "detail_complet": produits[
+            ['produit', 'categorie', 'sous_categorie', 'ca', 'ca_pct', 'ca_cumule_pct', 'classe']
+        ].to_dict('records')
+    }
+
 # === DÉMARRAGE DU SERVEUR ===
 
 if __name__ == "__main__":
@@ -531,3 +828,4 @@ if __name__ == "__main__":
     print("🚀 Démarrage de l'API Superstore BI sur http://localhost:8000")
     print("📚 Documentation disponible sur http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

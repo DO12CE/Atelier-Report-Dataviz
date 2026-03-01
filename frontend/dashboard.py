@@ -665,6 +665,503 @@ fig_segments.update_layout(
 )
 st.plotly_chart(fig_segments, use_container_width=True)
 
+st.divider()
+
+# === SECTION 4 : RENTABILITÉ ===
+st.header("💸 Analyse de Rentabilité")
+
+with st.spinner("🔍 Calcul de la rentabilité..."):
+    rentabilite = appeler_api("/kpi/rentabilite")
+
+# --- Tranches de marge ---
+st.subheader("📊 Répartition des ventes par tranche de marge")
+
+df_tranches = pd.DataFrame(rentabilite['tranches_marge'])
+
+col_t1, col_t2 = st.columns([2, 1])
+
+with col_t1:
+    fig_tranches = px.bar(
+        df_tranches,
+        x='tranche',
+        y='ca',
+        color='tranche',
+        title="Chiffre d'affaires par tranche de marge",
+        labels={'tranche': 'Tranche de marge', 'ca': 'CA (€)', 'nb_lignes': 'Lignes de commande'},
+        text='nb_lignes',
+        color_discrete_sequence=['#e74c3c', '#f39c12', '#2ecc71', '#1abc9c'],
+        height=350
+    )
+    fig_tranches.update_traces(texttemplate='%{text} lignes', textposition='outside')
+    st.plotly_chart(fig_tranches, use_container_width=True)
+
+with col_t2:
+    st.markdown("#### 🎯 Lecture décisionnelle")
+    total_ca = df_tranches['ca'].sum()
+    for _, row in df_tranches.iterrows():
+        pct = row['ca'] / total_ca * 100 if total_ca > 0 else 0
+        st.metric(row['tranche'], f"{pct:.1f}% du CA")
+
+# --- Remises par catégorie ---
+st.subheader("🏷️ Taux de remise moyen par catégorie")
+df_remises = pd.DataFrame(rentabilite['remises_par_categorie'])
+
+col_r1, col_r2 = st.columns(2)
+
+with col_r1:
+    fig_remises = px.bar(
+        df_remises,
+        x='categorie',
+        y='remise_moy',
+        title="Remise moyenne appliquée par catégorie (%)",
+        labels={'categorie': 'Catégorie', 'remise_moy': 'Remise moyenne (%)'},
+        color='remise_moy',
+        color_continuous_scale='RdYlGn_r',
+        text='remise_moy',
+        height=350
+    )
+    fig_remises.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+    st.plotly_chart(fig_remises, use_container_width=True)
+
+with col_r2:
+    st.markdown("#### ⚠️ Alerte remises")
+    for row in rentabilite['remises_par_categorie']:
+        if row['remise_moy'] > 20:
+            st.error(f"🔴 **{row['categorie']}** : remise de {row['remise_moy']:.1f}% — impact fort sur les marges")
+        elif row['remise_moy'] > 10:
+            st.warning(f"🟡 **{row['categorie']}** : remise de {row['remise_moy']:.1f}% — à surveiller")
+        else:
+            st.success(f"🟢 **{row['categorie']}** : remise de {row['remise_moy']:.1f}% — sous contrôle")
+
+# --- Produits déficitaires ---
+st.subheader("🚨 Top 10 Produits Déficitaires")
+df_def = pd.DataFrame(rentabilite['produits_deficitaires'])
+if not df_def.empty:
+    fig_def = px.bar(
+        df_def,
+        x='profit',
+        y='produit',
+        orientation='h',
+        color='categorie',
+        title="Produits générant des pertes (profit négatif)",
+        labels={'profit': 'Profit (€)', 'produit': 'Produit'},
+        color_discrete_sequence=px.colors.qualitative.Set2,
+        height=400
+    )
+    fig_def.update_layout(yaxis={'categoryorder': 'total ascending'})
+    st.plotly_chart(fig_def, use_container_width=True)
+
+    with st.expander("📋 Tableau détaillé des produits déficitaires"):
+        st.dataframe(
+            df_def[['produit', 'categorie', 'profit', 'ca', 'remise_moy', 'marge_pct']].rename(columns={
+                'produit': 'Produit', 'categorie': 'Catégorie',
+                'profit': 'Profit (€)', 'ca': 'CA (€)',
+                'remise_moy': 'Remise moy.', 'marge_pct': 'Marge (%)'
+            }),
+            use_container_width=True, hide_index=True
+        )
+
+st.divider()
+
+# === SECTION 5 : TENDANCES & SAISONNALITÉ ===
+st.header("📐 Tendances & Saisonnalité")
+
+with st.spinner("📈 Calcul des tendances..."):
+    tendances = appeler_api("/kpi/tendances")
+
+df_mensuel = pd.DataFrame(tendances['mensuel'])
+
+col_m1, col_m2 = st.columns([2, 1])
+
+with col_m1:
+    # Graphique MoM
+    df_mom = df_mensuel.dropna(subset=['ca_mom_pct'])  # Exclut le premier mois sans valeur
+
+    fig_mom = go.Figure()
+    fig_mom.add_trace(go.Bar(
+        x=df_mom['mois'],
+        y=df_mom['ca_mom_pct'],
+        name='Croissance MoM (%)',
+        marker_color=df_mom['ca_mom_pct'].apply(lambda v: '#2ecc71' if v >= 0 else '#e74c3c'),
+        text=df_mom['ca_mom_pct'].apply(lambda v: f"{v:+.1f}%"),
+        textposition='outside'
+    ))
+    fig_mom.update_layout(
+        title="Croissance mensuelle du CA (Mois sur Mois)",
+        xaxis_title="Mois",
+        yaxis_title="Variation (%)",
+        height=400
+    )
+    st.plotly_chart(fig_mom, use_container_width=True)
+
+with col_m2:
+    st.markdown("#### 🏆 Records historiques")
+    m = tendances['meilleur_mois']
+    p = tendances['pire_mois']
+    st.success(f"**Meilleur mois** : {m['mois']}\n\nCA : {m['ca']:,.0f} €")
+    st.error(f"**Pire mois** : {p['mois']}\n\nCA : {p['ca']:,.0f} €")
+
+# Graphique trimestriel
+df_trim = pd.DataFrame(tendances['trimestriel'])
+fig_trim = px.bar(
+    df_trim,
+    x='trimestre',
+    y=['ca', 'profit'],
+    title="Performance par trimestre",
+    labels={'value': 'Montant (€)', 'trimestre': 'Trimestre', 'variable': 'Indicateur'},
+    barmode='group',
+    color_discrete_map={'ca': '#3498db', 'profit': '#2ecc71'},
+    height=380
+)
+st.plotly_chart(fig_trim, use_container_width=True)
+
+st.divider()
+
+# === SECTION 6 : ANALYSE RFM ===
+st.header("🎯 Segmentation Clients — Analyse RFM")
+st.markdown("""
+> **RFM** = **R**écence (dernier achat), **F**réquence (nb de commandes), **M**ontant (CA total)  
+> Cette segmentation permet d'identifier les clients à fidéliser, réactiver ou conquérir.
+""")
+
+with st.spinner("🔍 Calcul de la segmentation RFM..."):
+    rfm_data = appeler_api("/kpi/clients/rfm")
+
+df_rfm_resume = pd.DataFrame(rfm_data['resume_segments'])
+
+# Graphique segments RFM
+col_rfm1, col_rfm2 = st.columns(2)
+
+with col_rfm1:
+    fig_rfm_nb = px.pie(
+        df_rfm_resume,
+        values='nb_clients',
+        names='segment',
+        title="Répartition des clients par segment RFM",
+        color_discrete_sequence=['#1abc9c', '#3498db', '#f39c12', '#e74c3c'],
+        height=380
+    )
+    fig_rfm_nb.update_traces(textposition='inside', textinfo='percent+label')
+    st.plotly_chart(fig_rfm_nb, use_container_width=True)
+
+with col_rfm2:
+    fig_rfm_ca = px.bar(
+        df_rfm_resume,
+        x='segment',
+        y='montant_moyen',
+        title="Montant moyen par segment RFM",
+        labels={'segment': 'Segment', 'montant_moyen': 'Montant moyen (€)'},
+        color='segment',
+        color_discrete_sequence=['#1abc9c', '#3498db', '#f39c12', '#e74c3c'],
+        text='montant_moyen',
+        height=380
+    )
+    fig_rfm_ca.update_traces(texttemplate='%{text:,.0f}€', textposition='outside')
+    st.plotly_chart(fig_rfm_ca, use_container_width=True)
+
+# Tableau RFM + recommandations
+st.subheader("📋 Recommandations par segment")
+recommandations = {
+    'Champions':        ('🥇', '#1abc9c', "Ces clients achètent souvent et récemment. **Fidélisez-les** avec des offres exclusives et programmes VIP."),
+    'Fidèles':          ('🤝', '#3498db', "Clients réguliers mais pas nécessairement récents. **Proposez des ventes croisées** et upselling."),
+    'À risque':         ('⚠️', '#f39c12', "N'ont pas acheté depuis un moment. **Lancez une campagne de réactivation** avec une offre personnalisée."),
+    'Perdus / Inactifs':('💤', '#e74c3c', "Clients très inactifs. **Décidez** : campagne de reconquête ou abandon. Coût de réactivation élevé."),
+}
+
+for _, row in df_rfm_resume.iterrows():
+    seg = row['segment']
+    if seg in recommandations:
+        emoji, color, conseil = recommandations[seg]
+        with st.expander(f"{emoji} **{seg}** — {row['nb_clients']} clients | Montant moyen : {row['montant_moyen']:,.0f} €"):
+            st.markdown(f"**Récence moyenne** : {row['recence_moyenne']:.0f} jours | "
+                        f"**Fréquence moyenne** : {row['frequence_moyenne']:.1f} commandes")
+            st.info(conseil)
+
+# TOP 10 clients detail
+with st.expander("🔍 Voir le détail des 50 meilleurs clients RFM"):
+    df_detail = pd.DataFrame(rfm_data['detail_clients'])
+    st.dataframe(
+        df_detail[['nom', 'recence', 'frequence', 'montant', 'score_rfm', 'segment']].rename(columns={
+            'nom': 'Client', 'recence': 'Récence (j)', 'frequence': 'Fréquence',
+            'montant': 'Montant (€)', 'score_rfm': 'Score RFM', 'segment': 'Segment'
+        }),
+        use_container_width=True, hide_index=True
+    )
+
+st.divider()
+
+# === SECTION 7 : RECOMMANDATIONS DÉCISIONNELLES ===
+st.header("🧭 Synthèse & Recommandations Décisionnelles")
+st.markdown("""
+> Cette section transforme les indicateurs en **messages actionnables** — c'est l'essence du data storytelling.
+""")
+
+col_rec1, col_rec2, col_rec3 = st.columns(3)
+
+with col_rec1:
+    st.markdown("### 🔍 Constats")
+    df_def_check = pd.DataFrame(rentabilite['produits_deficitaires'])
+    nb_def = len(df_def_check)
+    remise_max = max(r['remise_moy'] for r in rentabilite['remises_par_categorie'])
+    cat_risque = next(r['categorie'] for r in rentabilite['remises_par_categorie'] if r['remise_moy'] == remise_max)
+
+    st.warning(f"⚠️ **{nb_def} produits déficitaires** identifiés dans le catalogue")
+    st.warning(f"⚠️ La catégorie **{cat_risque}** affiche la remise la plus élevée ({remise_max:.1f}%)")
+
+    seg_perdus = next((r for r in rfm_data['resume_segments'] if r['segment'] == 'Perdus / Inactifs'), None)
+    if seg_perdus:
+        st.warning(f"⚠️ **{seg_perdus['nb_clients']} clients inactifs** n'ont pas commandé depuis longtemps")
+
+with col_rec2:
+    st.markdown("### 🎯 Actions prioritaires")
+    st.success("✅ **Réduire les remises** sur les catégories à faible marge pour restaurer la rentabilité")
+    st.success("✅ **Revoir ou retirer** les produits déficitaires chroniques du catalogue")
+    st.success("✅ **Lancer une campagne** de réactivation ciblée sur les clients 'À risque'")
+    st.success("✅ **Renforcer les offres** pour les clients Champions (programme fidélité)")
+
+with col_rec3:
+    st.markdown("### 📈 Opportunités")
+    seg_champ = next((r for r in rfm_data['resume_segments'] if r['segment'] == 'Champions'), None)
+    if seg_champ:
+        st.info(f"💎 **{seg_champ['nb_clients']} Champions** : fort potentiel d'upselling et d'ambassadeurs")
+
+    meilleur = tendances['meilleur_mois']
+    st.info(f"📅 **Saisonnalité** : {meilleur['mois']} est historiquement le meilleur mois — anticipez les stocks")
+    st.info("🌍 **Géographie** : analysez les régions sous-performantes via les filtres pour cibler vos actions commerciales")
+
+
+st.divider()
+
+# === SECTION : TAUX DE RÉTENTION CLIENT ===
+st.header("🔁 Taux de Rétention Client")
+st.markdown("""
+> **Formule** : (Clients avec 2+ commandes / Total clients) × 100  
+> Un taux de rétention élevé signifie que les clients reviennent — bien plus rentable que d'en acquérir de nouveaux.
+""")
+
+with st.spinner("📊 Calcul de la rétention..."):
+    retention_data = appeler_api("/kpi/clients/retention")
+
+# --- KPI principal ---
+col_ret1, col_ret2, col_ret3, col_ret4 = st.columns(4)
+
+with col_ret1:
+    st.metric(
+        label="🔁 Taux de rétention",
+        value=f"{retention_data['taux_retention_pct']}%",
+        help="(Clients avec 2+ commandes / Total clients) × 100"
+    )
+with col_ret2:
+    st.metric(
+        label="👥 Total clients",
+        value=formater_nombre(retention_data['total_clients'])
+    )
+with col_ret3:
+    st.metric(
+        label="✅ Clients récurrents",
+        value=formater_nombre(retention_data['clients_recurrents']),
+        help="Ont passé au moins 2 commandes"
+    )
+with col_ret4:
+    st.metric(
+        label="⚠️ Clients 1 achat",
+        value=formater_nombre(retention_data['clients_1_achat']),
+        help="N'ont commandé qu'une seule fois"
+    )
+
+# --- Interprétation automatique ---
+taux = retention_data['taux_retention_pct']
+if taux >= 70:
+    st.success(f"✅ **Excellente rétention ({taux}%)** : la majorité des clients reviennent. Maintenez la qualité de service et capitalisez sur ce levier.")
+elif taux >= 50:
+    st.warning(f"🟡 **Rétention correcte ({taux}%)** : un client sur deux revient. Des actions de fidélisation ciblées permettraient d'améliorer ce ratio.")
+else:
+    st.error(f"🔴 **Rétention faible ({taux}%)** : plus de la moitié des clients ne reviennent pas. Analysez les causes (qualité, prix, expérience) et lancez des campagnes de réactivation.")
+
+col_rv1, col_rv2 = st.columns(2)
+
+with col_rv1:
+    # Distribution du nombre de commandes par client
+    df_distrib = pd.DataFrame(retention_data['distribution_commandes'])
+    fig_distrib = px.bar(
+        df_distrib,
+        x='nb_commandes',
+        y='nb_clients',
+        title="Distribution du nombre de commandes par client",
+        labels={'nb_commandes': 'Nombre de commandes', 'nb_clients': 'Nombre de clients'},
+        color='nb_clients',
+        color_continuous_scale='Blues',
+        text='nb_clients',
+        height=380
+    )
+    fig_distrib.update_traces(textposition='outside')
+    st.plotly_chart(fig_distrib, use_container_width=True)
+
+with col_rv2:
+    # Évolution du taux de rétention par année
+    df_ret_annee = pd.DataFrame(retention_data['retention_par_annee'])
+    fig_ret_annee = go.Figure()
+    fig_ret_annee.add_trace(go.Bar(
+        x=df_ret_annee['annee'].astype(str),
+        y=df_ret_annee['taux_retention_pct'],
+        name='Taux de rétention (%)',
+        marker_color='#3498db',
+        text=df_ret_annee['taux_retention_pct'].apply(lambda v: f"{v}%"),
+        textposition='outside'
+    ))
+    fig_ret_annee.update_layout(
+        title="Évolution du taux de rétention par année",
+        xaxis_title="Année",
+        yaxis_title="Taux de rétention (%)",
+        height=380
+    )
+    st.plotly_chart(fig_ret_annee, use_container_width=True)
+
+st.divider()
+
+# === SECTION : ABC ANALYSIS DES PRODUITS ===
+st.header("📦 ABC Analysis — Analyse Pareto des Produits")
+st.markdown("""
+> **Principe** : 20% des produits génèrent 80% du CA (loi de Pareto).  
+> - **Classe A** 🥇 : 80% du CA cumulé → produits stratégiques à protéger  
+> - **Classe B** 🥈 : 15% suivants → importance secondaire  
+> - **Classe C** 🥉 : 5% restants → faible valeur, à optimiser ou retirer  
+""")
+
+with st.spinner("🔍 Calcul de l'analyse ABC..."):
+    abc_data = appeler_api("/kpi/produits/abc")
+
+df_resume_abc = pd.DataFrame(abc_data['resume_abc'])
+
+# --- KPI résumé par classe ---
+col_a, col_b, col_c = st.columns(3)
+couleurs_abc = {'A': '#2ecc71', 'B': '#f39c12', 'C': '#e74c3c'}
+labels_abc   = {
+    'A': ('🥇 Classe A', 'Produits stratégiques — 80% du CA'),
+    'B': ('🥈 Classe B', 'Importance secondaire — 15% du CA'),
+    'C': ('🥉 Classe C', 'Faible contribution — 5% du CA')
+}
+cols_abc = [col_a, col_b, col_c]
+
+for i, (_, row) in enumerate(df_resume_abc.iterrows()):
+    classe = row['classe']
+    titre, desc = labels_abc.get(classe, (classe, ''))
+    with cols_abc[i]:
+        st.metric(
+            label=titre,
+            value=f"{row['nb_produits']} produits",
+            delta=f"{row['ca_pct_total']:.1f}% du CA total"
+        )
+        st.caption(desc)
+
+# --- Graphiques ABC ---
+col_abc1, col_abc2 = st.columns(2)
+
+with col_abc1:
+    # Camembert des classes
+    fig_abc_pie = px.pie(
+        df_resume_abc,
+        values='nb_produits',
+        names='classe',
+        title="Répartition des produits par classe ABC",
+        color='classe',
+        color_discrete_map={'A': '#2ecc71', 'B': '#f39c12', 'C': '#e74c3c'},
+        hole=0.4,
+        height=400
+    )
+    fig_abc_pie.update_traces(textposition='inside', textinfo='percent+label')
+    st.plotly_chart(fig_abc_pie, use_container_width=True)
+
+with col_abc2:
+    # CA par classe
+    fig_abc_ca = px.bar(
+        df_resume_abc,
+        x='classe',
+        y='ca_total',
+        title="CA total généré par classe ABC",
+        labels={'classe': 'Classe ABC', 'ca_total': 'CA (€)'},
+        color='classe',
+        color_discrete_map={'A': '#2ecc71', 'B': '#f39c12', 'C': '#e74c3c'},
+        text='ca_pct_total',
+        height=400
+    )
+    fig_abc_ca.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+    st.plotly_chart(fig_abc_ca, use_container_width=True)
+
+# --- Courbe de Pareto ---
+st.subheader("📈 Courbe de Pareto — Top 20 produits")
+df_pareto = pd.DataFrame(abc_data['top_pareto'])
+
+fig_pareto = make_subplots(specs=[[{"secondary_y": True}]])
+
+fig_pareto.add_trace(
+    go.Bar(
+        x=df_pareto['produit'].apply(lambda x: x[:30] + '…' if len(x) > 30 else x),
+        y=df_pareto['ca'],
+        name='CA (€)',
+        marker_color=df_pareto['classe'].map({'A': '#2ecc71', 'B': '#f39c12', 'C': '#e74c3c'}),
+    ),
+    secondary_y=False
+)
+
+fig_pareto.add_trace(
+    go.Scatter(
+        x=df_pareto['produit'].apply(lambda x: x[:30] + '…' if len(x) > 30 else x),
+        y=df_pareto['ca_cumule_pct'],
+        name='CA cumulé (%)',
+        mode='lines+markers',
+        line=dict(color='#8e44ad', width=3),
+        marker=dict(size=6)
+    ),
+    secondary_y=True
+)
+
+# Ligne de seuil 80%
+fig_pareto.add_hline(
+    y=80,
+    line_dash="dash",
+    line_color="red",
+    annotation_text="Seuil 80% (Classe A)",
+    secondary_y=True
+)
+
+fig_pareto.update_layout(
+    title="Courbe de Pareto — CA et % cumulé (Top 20 produits)",
+    xaxis_title="Produit",
+    height=500,
+    xaxis_tickangle=-45
+)
+fig_pareto.update_yaxes(title_text="CA (€)", secondary_y=False)
+fig_pareto.update_yaxes(title_text="CA cumulé (%)", secondary_y=True, range=[0, 105])
+
+st.plotly_chart(fig_pareto, use_container_width=True)
+
+# --- Tableau complet avec filtre par classe ---
+st.subheader("📋 Catalogue produits classifié ABC")
+filtre_classe = st.radio(
+    "Afficher la classe",
+    options=['Toutes', 'A', 'B', 'C'],
+    horizontal=True
+)
+
+df_detail_abc = pd.DataFrame(abc_data['detail_complet'])
+if filtre_classe != 'Toutes':
+    df_detail_abc = df_detail_abc[df_detail_abc['classe'] == filtre_classe]
+
+st.dataframe(
+    df_detail_abc[['produit', 'categorie', 'sous_categorie', 'ca', 'ca_pct', 'ca_cumule_pct', 'classe']].rename(columns={
+        'produit': 'Produit',
+        'categorie': 'Catégorie',
+        'sous_categorie': 'Sous-catégorie',
+        'ca': 'CA (€)',
+        'ca_pct': 'CA (%)',
+        'ca_cumule_pct': 'CA cumulé (%)',
+        'classe': 'Classe ABC'
+    }),
+    use_container_width=True,
+    hide_index=True
+)
+
 # === FOOTER ===
 st.divider()
 st.markdown("---")

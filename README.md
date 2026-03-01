@@ -1,134 +1,240 @@
-# 🛒 Superstore BI - API FastAPI + Dashboard Streamlit
+# 🛒 Superstore BI — API FastAPI + Dashboard Streamlit
 
-Système complet d'analyse Business Intelligence (BI) utilisant le dataset **Sample Superstore**. Ce projet combine une API robuste pour le calcul des indicateurs et un dashboard interactif pour la visualisation des données.
+Système complet d'analyse Business Intelligence (BI) construit sur le dataset **Sample Superstore**. Le projet combine une API backend robuste pour le calcul des indicateurs et un dashboard frontend interactif pour la visualisation et l'aide à la décision.
 
-## 🚀 Évolutions Majeures (Version 1.1)
-
-Cette version apporte des fonctionnalités analytiques avancées qui transforment le projet d'un simple affichage de données en un véritable outil d'aide à la décision.
-
-### 🔹 1. Analyse Comparative Temporelle (Deltas)
-
-* **Nouveauté** : Endpoint `/kpi/comparaison`.
-* **Fonctionnalité** : L'API compare désormais la période sélectionnée avec la période précédente de même durée.
-* **Impact** : Affichage de **Deltas** (indicateurs de croissance/baisse en %) sur le dashboard pour le CA et le Profit.
-
-### 🔹 2. Indicateur de Rentabilité (ROI)
-
-* **Nouveauté** : Ajout du calcul du **ROI (Return on Investment)** par catégorie.
-* **Formule** : 
-  $$
-  ROI = \frac{Profit}{Sales - Profit} \times 100
-  $$
-* **Impact** : Permet d'identifier les segments les plus rentables au-delà du simple volume de ventes.
-
-### 🔹 3. Cartographie Dynamique des USA
-
-* **Nouveauté** : Endpoint `/kpi/geographique/états`.
-* **Technique** : Implémentation d'un mapping ISO (ex: `California -> CA`) pour la compatibilité avec les cartes Plotly.
-* **Impact** : Visualisation par carte thermique (Choroplèthe) pour détecter les zones géographiques sous-performantes.
-
-### 🔹 4. Storytelling Automatisé
-
-* **Nouveauté** : Section "Ce que disent les chiffres" dans le dashboard.
-* **Impact** : Génération d'alertes textuelles dynamiques (Success/Warning) basées sur les tendances détectées par l'API.
+> **Auteurs** : Mohamed Yanis BENADROUCHE, Cyprien BROCHE, Yousra ZAABAT
 
 ---
 
-## 📊 KPI Implémentés
-
-### 💰 Finance & Rentabilité
-
-- **CA Total** & **Profit Total** (avec évolution en %)
-- **Marge Moyenne** et **ROI** par catégorie
-- **Panier Moyen** & **Nombre d'articles par commande**
-
-### 📦 Produits & Catégories
-
-- **Top 10 Produits** par CA, Profit ou Quantité
-- **Répartition du CA** par catégorie et sous-catégorie
-- **Analyse de la performance croisée** (Ventes vs Profit)
-
-### 👥 Clients & Géographie
-
-- **Top 10 Clients** par CA
-- **Taux de fidélisation** (Clients récurrents vs nouveaux)
-- **Analyse par Segment** (Consumer, Corporate, Home Office)
-- **Carte Thermique** des ventes par État américain
-
----
-
-## 📁 Structure du Projet
+## 📁 Structure du projet
 
 ```
-
 superstore-bi/
 │
 ├── backend/
-│   └── main.py              # API FastAPI (Calculs, Filtres, Nouveaux Endpoints)
+│   └── main.py          # API FastAPI — calculs, filtres, endpoints KPI
 │
 ├── frontend/
-│   └── dashboard.py         # Dashboard Streamlit (Visualisation, Storytelling, Cartes)
+│   └── dashboard.py     # Dashboard Streamlit — visualisations, storytelling
 │
-├── tests/
-│   └── test_api.py          # Tests unitaires
+├── ressources/
+│   └── ...
 │
-├── requirements.txt         # Dépendances Python
-└── README.md                # Documentation
-
+├── docker-compose.yml   # Orchestration des services (backend + frontend)
+├── requirements.txt     # Dépendances Python
+└── README.md
 ```
 
 ---
 
-## 🛠️ Installation et Démarrage
+## 🛠️ Installation & Démarrage
 
-### 1. Prérequis
+### Prérequis
 
 - Python 3.9+
-- Pip
+- pip
+- Docker & Docker Compose (recommandé)
 
-### 2. Installation des dépendances
+### Option 1 — Avec Docker Compose (recommandé)
+
+```bash
+docker-compose up --build
+```
+
+> ⚠️ Le flag `--build` est obligatoire au premier lancement ou après toute modification du code.
+
+Une fois les conteneurs démarrés :
+
+| Service | URL | Description |
+|---|---|---|
+| 🖥️ Dashboard | http://localhost:8501 | Interface Streamlit |
+| ⚙️ API Backend | http://localhost:8000 | API FastAPI |
+| 📚 Documentation Swagger | http://localhost:8000/docs | Documentation interactive des endpoints |
+| 📖 Documentation ReDoc | http://localhost:8000/redoc | Documentation alternative |
+
+> La variable d'environnement `API_URL=http://backend:8000` est gérée automatiquement par Docker Compose — aucune configuration manuelle nécessaire.
+
+### Option 2 — En local sans Docker
+
+#### 1. Installer les dépendances
 
 ```bash
 pip install -r requirements.txt
-
 ```
 
-### 3. Lancement de l'API (Backend)
+#### 2. Lancer le backend (API)
 
 ```bash
 python backend/main.py
-
 ```
 
-> L'API est accessible sur `http://localhost:8000`. Consultez la documentation interactive Swagger sur `http://localhost:8000/docs`.
+> API disponible sur `http://localhost:8000`  
+> Documentation Swagger interactive : `http://localhost:8000/docs`
 
-### 4. Lancement du Dashboard (Frontend)
+#### 3. Lancer le frontend (Dashboard)
 
 ```bash
 streamlit run frontend/dashboard.py
-
 ```
 
-> Le dashboard s'ouvrira automatiquement sur `http://localhost:8501`.
+> Dashboard disponible sur `http://localhost:8501`
 
 ---
 
-## 💡 Choix Techniques
+## 📊 KPIs & Analyses implémentés
 
-* **FastAPI** : Choisi pour sa rapidité d'exécution et sa gestion native de la validation de données avec Pydantic.
-* **Pandas** : Utilisé pour la vectorisation des calculs financiers et la manipulation des séries temporelles.
-* **Plotly** : Pour des graphiques hautement interactifs et la gestion de la cartographie `USA-states`.
-* **Streamlit Cache** : Optimisation des performances via `@st.cache_data` pour éviter les appels API redondants lors du changement de filtres.
+### 💰 Finance & Rentabilité
+
+| Indicateur | Formule | Impact décisionnel |
+|---|---|---|
+| CA Total & Profit Total | Somme des ventes / profits | Avec delta vs période précédente (%) |
+| Marge moyenne | Profit / CA × 100 | Mesure l'efficacité commerciale |
+| ROI par catégorie | Profit / (CA − Profit) × 100 | Identifie les segments les plus rentables |
+| Panier moyen | CA / Nb commandes | Pilote la stratégie de montée en gamme |
+| Articles par commande | Quantité / Nb commandes | Mesure le cross-selling |
+| Tranches de marge | Déficitaire / Faible / Correct / Excellent | Détecte les zones de perte |
+| Remise moyenne par catégorie | Moyenne des taux de remise | Évalue l'impact des promotions sur les marges |
+| Produits déficitaires | Top 10 produits à profit négatif | Permet de revoir le catalogue ou la politique tarifaire |
+
+### 📦 Produits & Catégories
+
+| Indicateur | Formule | Impact décisionnel |
+|---|---|---|
+| Top N produits | Classement par CA, Profit ou Quantité | Identifie les best-sellers |
+| Performance par catégorie | CA, Profit, Marge, ROI, Nb commandes | Vision macro des segments produits |
+| Taux de croissance mensuel (MoM) | ((CA mois N − CA mois N-1) / CA mois N-1) × 100 | Suit la dynamique business en temps réel |
+| Performance trimestrielle | CA et Profit agrégés par trimestre | Détecte la saisonnalité |
+| Meilleur / Pire mois historique | Détection automatique des extremes | Anticipe les pics et creux d'activité |
+| **ABC Analysis (Pareto)** | Classe A = 80% CA cumulé / B = 15% / C = 5% | Optimise la gestion des stocks et la stratégie commerciale |
+
+### 👥 Clients
+
+| Indicateur | Formule | Impact décisionnel |
+|---|---|---|
+| Top 10 clients par CA | Agrégation par client | Identifie les comptes clés à chouchouter |
+| **Taux de rétention client** | (Clients 2+ commandes / Total clients) × 100 | Mesure la fidélisation — plus rentable que l'acquisition |
+| Distribution des commandes | Nb clients par tranche de commandes | Révèle le profil de fidélité de la base |
+| Évolution de la rétention | Taux de rétention par année | Suit la tendance de fidélisation dans le temps |
+| Analyse par segment | Consumer / Corporate / Home Office | Cible les actions marketing par profil |
+| **Segmentation RFM** | Score R + Score F + Score M (quartiles) | Classe les clients en Champions / Fidèles / À risque / Perdus |
+
+### 🌍 Géographie
+
+| Indicateur | Description |
+|---|---|
+| Performance par région | CA, Profit, Clients, Commandes |
+| Carte thermique USA | Choroplèthe par État (code ISO) |
 
 ---
 
-## 🗃️ Dataset Utilisé
+## 🔌 Endpoints API
 
-**Source** : [Sample Superstore Dataset](https://github.com/leonism/sample-superstore)
-Contient environ 10 000 transactions e-commerce (2014-2017) avec des données de ventes, profits, géographie et segments clients.
+| Méthode | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Informations générales sur l'API et le dataset |
+| GET | `/kpi/globaux` | KPI globaux filtrables (date, catégorie, région, segment) |
+| GET | `/kpi/comparaison` | Comparaison période courante vs période précédente |
+| GET | `/kpi/produits/top` | Top produits par CA, Profit ou Quantité |
+| GET | `/kpi/produits/abc` | ABC Analysis — classement Pareto de tous les produits |
+| GET | `/kpi/categories` | Performance par catégorie avec ROI |
+| GET | `/kpi/temporel` | Évolution temporelle (jour / mois / année) |
+| GET | `/kpi/geographique` | Performance par région |
+| GET | `/kpi/geographique/états` | Performance par État (avec codes ISO) |
+| GET | `/kpi/clients` | Top clients, récurrence, segments |
+| GET | `/kpi/clients/retention` | Taux de rétention, distribution, évolution annuelle |
+| GET | `/kpi/clients/rfm` | Segmentation RFM des clients |
+| GET | `/kpi/rentabilite` | Déficitaires, remises, tranches de marge |
+| GET | `/kpi/tendances` | MoM, trimestriel, extremes historiques |
+| GET | `/filters/valeurs` | Valeurs disponibles pour les filtres |
+| GET | `/data/commandes` | Données brutes paginées |
 
+---
 
+## 🖥️ Sections du Dashboard
 
-## 📝 Auteurs
+### 1. Storytelling & Analyse Comparative
+Génération automatique de messages contextuels (alertes, succès, avertissements) basés sur l'évolution du CA et du Profit par rapport à la période précédente.
 
-*Mohamed Yanis BENADROUCHE, Cyprien BROCHE et Yousra ZAABAT*
+### 2. KPI Globaux
+Huit indicateurs clés avec deltas : CA, Profit, Marge, Commandes, Clients, Panier moyen, Quantité, Articles/commande.
+
+### 3. Analyses Détaillées (4 onglets)
+- **🏆 Produits** : Top N produits avec sélecteur de critère et tableau détaillé
+- **📦 Catégories** : CA vs Profit et ROI par catégorie
+- **📅 Temporel** : Évolution jour/mois/année du CA, Profit et Commandes
+- **🌍 Géographique** : Barres par région, camembert clients, carte thermique USA
+
+### 4. Analyse Clients
+Top clients, statistiques de récurrence, performance par segment.
+
+### 5. Rentabilité
+Répartition par tranche de marge, alertes sur les remises excessives, visualisation des produits déficitaires.
+
+### 6. Tendances & Saisonnalité
+Croissance MoM colorée (vert/rouge), records historiques, performance trimestrielle.
+
+### 7. Taux de Rétention Client
+Taux global avec interprétation automatique, distribution du nombre de commandes par client, évolution annuelle du taux de rétention.
+
+### 8. ABC Analysis — Pareto des Produits
+Résumé par classe (A/B/C), camembert des classes, courbe de Pareto avec seuil 80%, tableau filtrable du catalogue complet.
+
+### 9. Segmentation RFM
+Répartition des clients en 4 segments avec montant moyen, récence et recommandations actionnables par segment.
+
+### 10. Synthèse Décisionnelle
+Tableau de bord narratif synthétisant les constats, les actions prioritaires et les opportunités détectées automatiquement.
+
+---
+
+## 💡 Choix techniques
+
+| Technologie | Raison |
+|---|---|
+| **FastAPI** | Validation native via Pydantic, documentation Swagger automatique, haute performance |
+| **Pandas** | Vectorisation des calculs financiers, manipulation des séries temporelles |
+| **Plotly** | Graphiques interactifs, support natif des cartes choroplèthes USA |
+| **Streamlit** | Déploiement rapide, widgets interactifs, système de cache intégré |
+| **Docker Compose** | Orchestration des services backend/frontend, résolution DNS interne (`http://backend:8000`) |
+| **`@st.cache_data`** | Évite les appels API redondants lors des changements de filtres |
+| **`math.isnan` / `nettoyer_nan()`** | Nettoyage des valeurs `NaN`/`Inf` avant sérialisation JSON (non supportées nativement par `json.dumps`) |
+
+---
+
+## 🗃️ Dataset
+
+**Source** : [Sample Superstore — GitHub](https://github.com/leonism/sample-superstore)
+
+Environ **10 000 transactions** e-commerce couvrant la période **2014–2017**, avec des données de ventes, profits, remises, géographie et segments clients.
+
+---
+
+## 📐 Formules clés
+
+$$
+\text{Marge} = \frac{\text{Profit}}{\text{CA}} \times 100
+$$
+
+$$
+\text{ROI} = \frac{\text{Profit}}{\text{CA} - \text{Profit}} \times 100
+$$
+
+$$
+\text{Panier moyen} = \frac{\text{CA}}{\text{Nombre de commandes}}
+$$
+
+$$
+\text{Taux de croissance MoM} = \frac{\text{CA}_N - \text{CA}_{N-1}}{\text{CA}_{N-1}} \times 100
+$$
+
+$$
+\text{Taux de rétention} = \frac{\text{Clients avec } 2+ \text{ commandes}}{\text{Total clients}} \times 100
+$$
+
+$$
+\text{Score RFM} = \text{Score}_R + \text{Score}_F + \text{Score}_M \quad \in [3,\ 12]
+$$
+
+$$
+\text{Classe ABC} = \begin{cases} A & \text{si CA cumulé} \leq 80\% \\ B & \text{si CA cumulé} \leq 95\% \\ C & \text{sinon} \end{cases}
+$$
